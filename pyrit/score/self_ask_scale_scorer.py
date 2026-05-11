@@ -21,17 +21,19 @@ class SelfAskScaleScorer(Scorer):
     class ScalePaths(enum.Enum):
         TREE_OF_ATTACKS_SCALE = Path(SCALES_PATH, "tree_of_attacks_scale.yaml").resolve()
         TASK_ACHIEVED_SCALE = Path(SCALES_PATH, "task_achieved_scale.yaml").resolve()
+        CRITERIA_SCALE = Path(SCALES_PATH, "criteria_example_scale.yaml").resolve()
 
     class SystemPaths(enum.Enum):
         GENERAL_SYSTEM_PROMPT = Path(SCALES_PATH, "general_system_prompt.yaml").resolve()
         RED_TEAMER_SYSTEM_PROMPT = Path(SCALES_PATH, "red_teamer_system_prompt.yaml").resolve()
+        CRITERIA_SYSTEM_PROMPT = Path(SCALES_PATH, "criteria_system_prompt.yaml").resolve()
 
     def __init__(
         self,
         *,
         chat_target: PromptChatTarget,
-        scale_arguments_path: Optional[Path],
-        system_prompt_path: Optional[Path],
+        scale_arguments_path: Optional[Path] = None,
+        system_prompt_path: Optional[Path] = None,
     ) -> None:
         self._prompt_target = chat_target
         self.scorer_type = "float_scale"
@@ -54,9 +56,9 @@ class SelfAskScaleScorer(Scorer):
 
         self._system_prompt = scoring_instructions_template.render_template_value(**scale_args)
 
-    async def score_async(self, request_response: PromptRequestPiece, *, task: Optional[str] = None) -> list[Score]:
+    async def _score_async(self, request_response: PromptRequestPiece, *, task: Optional[str] = None) -> list[Score]:
         """
-        Scores the given request_response using "self-ask" for the chat target and adds score to memory.
+        Scores the given request_response using "self-ask" for the chat target.
 
         Args:
             request_response (PromptRequestPiece): The prompt request piece containing the text to be scored.
@@ -66,8 +68,6 @@ class SelfAskScaleScorer(Scorer):
             list[Score]: The request_response scored.
                          The score_value is a value from [0,1] that is scaled based on the scorer's scale.
         """
-        self.validate(request_response, task=task)
-
         scoring_prompt = f"task: {task}\nresponse: {request_response.converted_value}"
 
         unvalidated_score: UnvalidatedScore = await self._score_value_with_llm(
@@ -88,7 +88,6 @@ class SelfAskScaleScorer(Scorer):
             )
         )
 
-        self._memory.add_scores_to_memory(scores=[score])
         return [score]
 
     def validate(self, request_response: PromptRequestPiece, *, task: Optional[str] = None):
